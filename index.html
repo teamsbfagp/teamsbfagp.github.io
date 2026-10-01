@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Hub Portal - Secure Access</title>
+    <title>Team Hub Portal - Sheet Authenticated</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #f5f5f5; color: #333; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         
-        /* Login Screen Layout */
+        /* Login Form Styling */
         #login-screen { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
         #login-screen h2 { color: #464775; margin-bottom: 20px; font-size: 24px; }
         .input-group { margin-bottom: 15px; text-align: left; }
@@ -16,19 +16,17 @@
         .input-group input { width: 100%; padding: 10px; border: 1px solid #ccd0d5; border-radius: 4px; font-size: 15px; }
         .input-group input:focus { border-color: #464775; outline: none; }
         
-        /* 2FA Container (Hidden by default) */
         #tfa-container { display: none; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 15px; }
         
-        /* Buttons */
         .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
         .btn-primary { background-color: #464775; color: white; }
         .btn-primary:hover { background-color: #3b3c63; }
-        .btn-code { background-color: #f0f0f7; color: #464775; border: 1px solid #464775; margin-bottom: 10px; font-size: 14px; padding: 8px; }
+        .btn-code { background-color: #f0f0f7; color: #464775; border: 1px solid #464775; margin-bottom: 15px; font-size: 14px; padding: 10px; }
         .btn-code:hover { background-color: #e2e2f6; }
         
-        #error-msg { color: #d9534f; font-size: 14px; margin-top: 10px; display: none; }
+        #error-msg { color: #d9534f; font-size: 14px; margin-top: 10px; display: none; font-weight: 500; }
 
-        /* Dashboard App Interface (Hidden until login complete) */
+        /* Dashboard Application Workspace Styling */
         #app-dashboard { display: none; width: 100%; height: 100vh; grid-template-columns: 220px 1fr; }
         .sidebar { background-color: #464775; color: white; display: flex; flex-direction: column; padding: 20px 10px; }
         .sidebar h2 { font-size: 18px; margin-bottom: 25px; text-align: center; border-bottom: 1px solid #6264a7; padding-bottom: 10px; }
@@ -61,23 +59,23 @@
                 <label for="password">Password</label>
                 <input type="password" id="password" placeholder="••••••••">
             </div>
-            <button type="button" class="btn btn-primary" onclick="verifyCredentials()">Next</button>
+            <button type="button" class="btn btn-primary" id="next-btn" onclick="verifyCredentials()">Next</button>
         </div>
 
-        <!-- Step B: Multi-Factor Authentication Field (Triggered by Next) -->
+        <!-- Step B: Multi-Factor Authentication Field -->
         <div id="tfa-container">
             <button type="button" class="btn btn-code" onclick="simulateSendCode()">[Send Code]</button>
             <div class="input-group">
                 <label for="2fa-code">Enter 6-Digit 2FA Code</label>
                 <input type="text" id="2fa-code" maxlength="6" placeholder="000000">
             </div>
-            <button type="button" class="btn btn-primary" onclick="verify2FA()">Verify & Enter</button>
+            <button type="button" class="btn btn-primary" id="verify-btn" onclick="verify2FA()">Verify & Enter</button>
         </div>
 
-        <div id="error-msg">Invalid credentials. Please try again.</div>
+        <div id="error-msg"></div>
     </div>
 
-    <!-- STAGE 2: LIVE TEAM WORKSPACE (Revealed after verification) -->
+    <!-- STAGE 2: LIVE TEAM WORKSPACE (Hidden until Sheet verifies parameters) -->
     <div id="app-dashboard">
         <div class="sidebar">
             <h2>👥 Team Hub</h2>
@@ -105,47 +103,92 @@
         </div>
     </div>
 
-    <!-- SECURITY CONTROL LOGIC -->
+    <!-- LIVE GOOGLE SHEETS INTERFACE CONTROLLER -->
     <script>
-        // CONFIGURATION: Set your specific team access keys here
-        const TARGET_USER = "6303milh@outlook.com";
-        const TARGET_PASS = "Password123"; // Replace with your desired team password
-        const TARGET_2FA  = "123456";
+        // CONFIGURATION: Paste your Google Apps Script Web App URL between the quotes below
+        const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
 
-        function verifyCredentials() {
+        let currentUsername = "";
+        let currentPassword = "";
+
+        async function verifyCredentials() {
             const userIn = document.getElementById("username").value;
             const passIn = document.getElementById("password").value;
             const errorElement = document.getElementById("error-msg");
+            const nextBtn = document.getElementById("next-btn");
 
-            if (userIn === TARGET_USER && passIn === TARGET_PASS) {
-                errorElement.style.display = "none";
-                document.getElementById("credentials-form").style.display = "none";
-                document.getElementById("tfa-container").style.display = "block";
-            } else {
-                errorElement.innerText = "Incorrect username or password.";
+            errorElement.style.display = "none";
+            nextBtn.innerText = "Checking...";
+            nextBtn.disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "verifyCreds",
+                        username: userIn,
+                        password: passIn
+                    })
+                });
+                const result = await response.json();
+
+                if (result.status === "success") {
+                    currentUsername = userIn;
+                    currentPassword = passIn;
+                    document.getElementById("credentials-form").style.display = "none";
+                    document.getElementById("tfa-container").style.display = "block";
+                } else {
+                    errorElement.innerText = "Incorrect username or password configuration.";
+                    errorElement.style.display = "block";
+                }
+            } catch (err) {
+                errorElement.innerText = "Database connection error. Check your API URL.";
                 errorElement.style.display = "block";
+            } finally {
+                nextBtn.innerText = "Next";
+                nextBtn.disabled = false;
             }
         }
 
         function simulateSendCode() {
-            alert("A simulated security authorization token code has been dispatched to your device.");
+            alert("🔒 Code Dispatched:\n\nYour login request is valid. Use the 2FA code saved in your team's spreadsheet to complete sign-in.");
         }
 
-        function verify2FA() {
+        async function verify2FA() {
             const codeIn = document.getElementById("2fa-code").value;
             const errorElement = document.getElementById("error-msg");
+            const verifyBtn = document.getElementById("verify-btn");
 
-            if (codeIn === TARGET_2FA) {
-                // Clear validation panel, change body display, reveal system dashboard
-                document.getElementById("login-screen").style.display = "none";
-                document.body.style.display = "block"; 
-                document.getElementById("app-dashboard").style.display = "grid";
-                document.getElementById("user-display").innerText = "Signed in as: " + TARGET_USER;
-            } else {
-                errorElement.innerText = "Invalid 2FA Verification Code.";
+            errorElement.style.display = "none";
+            verifyBtn.innerText = "Verifying...";
+            verifyBtn.disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "verify2FA",
+                        username: currentUsername,
+                        password: currentPassword,
+                        twofa: codeIn
+                    })
+                });
+                const result = await response.json();
+
+                if (result.status === "authenticated") {
+                    document.getElementById("login-screen").style.display = "none";
+                    document.body.style.display = "block"; 
+                    document.getElementById("app-dashboard").style.display = "grid";
+                    document.getElementById("user-display").innerText = "Signed in as: " + currentUsername;
+                } else {
+                    errorElement.innerText = "Invalid 2FA Verification Code.";
+                    errorElement.style.display = "block";
+                }
+            } catch (err) {
+                errorElement.innerText = "Verification connection failed.";
                 errorElement.style.display = "block";
+            } finally {
+                verifyBtn.innerText = "Verify & Enter";
+                verifyBtn.disabled = false;
             }
-        }
-    </script>
-</body>
-</html>
+}
